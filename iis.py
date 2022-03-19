@@ -1,18 +1,25 @@
 import pandas as pd
-import re
+import re, glob, os
 
 cols = ['date', 'time', 's_ip', 'cs_method', 'cs_uri_stem', 'cs_uri_query', 's_port', 'cs_username', 'c_ip'
 , 'cs_user_agent', 'cs_referer', 'sc_status', 'sc_substatus', 'sc_win32_status', 'time_taken']
 
-df = pd.read_csv('./logs/iis.log', sep=' ', comment='#', engine='python', names=cols)
+logs = glob.glob(os.path.join('.', "logs/*.log"))
+df = pd.concat(map(lambda log: pd.read_csv(log, sep=' ', comment='#', engine='python', names=cols), logs))
 
-df.to_csv('./logs/iis_log.csv')
+df['datetime'] = df.apply(lambda row: row.date + ' ' + row.time, axis=1)
+df.datetime = pd.to_datetime(df.datetime)
+df.datetime = df.datetime.dt.tz_localize('UTC').dt.tz_convert('NZ')
+
+df = df.loc[(df['datetime'] >= '2022-03-18') & (df['datetime'] < '2022-03-19')]
+
+df.to_csv('./output/iis_log.csv')
 
 byapi = {}
 byuser = {}
 for index, row in df.iterrows():
     api = re.sub('[{]?[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}[}]?', 'guid', row.cs_uri_stem)
-    api = re.sub('([\/][^\/]+)\.(jpg|JPG|jpeg|JPEG|png|PNG)', 'img', api)
+    api = re.sub('([\/][^\/]+)\.(jpg|JPG|jpeg|JPEG|png|PNG|pdf)', 'imgpdf', api)
     api = re.sub('tests\/[A-Z0-9]{8}', 'tests', api)
     if api in byapi.keys():
         byapi[api]['count'] += 1
@@ -33,7 +40,7 @@ for x in byapi:
 
 pd_api = pd.DataFrame(data)
 
-pd_api.to_csv('./logs/by_api.csv')
+pd_api.to_csv('./output/by_api.csv')
 print(pd_api.describe())
 
 data = []
@@ -42,7 +49,7 @@ for x in byuser:
 
 pd_user = pd.DataFrame(data)
 
-pd_user.to_csv('./logs/by_user.csv')
+pd_user.to_csv('./output/by_user.csv')
 print(pd_user.describe())
 
 
